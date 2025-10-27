@@ -131,7 +131,7 @@ export default function InterviewResults() {
 
   const generateSummaryText = (analysisData, userName) => {
     const namePrefix = userName ? `${userName}, ` : ""
-    const score = analysisData?.overallScore || 75
+    const score = analysisData?.overallScore || 0
     
     let scoreComment = ""
     if (score >= 85) {
@@ -241,7 +241,7 @@ Overall, you showed good potential and with some targeted practice on the mentio
       pdf.circle(pageWidth / 2, yPosition + 15, 20, 'S')
       pdf.setFontSize(28)
       pdf.setTextColor(17, 24, 39)
-      pdf.text(`${analysis?.overallScore || 75}`, pageWidth / 2, yPosition + 18, { align: 'center' })
+      pdf.text(`${analysis?.overallScore || 0}`, pageWidth / 2, yPosition + 18, { align: 'center' })
       pdf.setFontSize(10)
       pdf.setTextColor(107, 114, 128)
       pdf.text('out of 100', pageWidth / 2, yPosition + 25, { align: 'center' })
@@ -266,9 +266,9 @@ Overall, you showed good potential and with some targeted practice on the mentio
       yPosition += 10
 
       const metrics = [
-        { label: 'Communication', score: analysis?.communicationScore || 78, color: [6, 182, 212] },
-        { label: 'Confidence', score: analysis?.confidenceScore || 82, color: [16, 185, 129] },
-        { label: 'Relevance', score: analysis?.relevanceScore || 85, color: [245, 158, 11] }
+        { label: 'Communication', score: analysis?.communicationScore || 0, color: [6, 182, 212] },
+        { label: 'Confidence', score: analysis?.confidenceScore || 0, color: [16, 185, 129] },
+        { label: 'Relevance', score: analysis?.relevanceScore || 0, color: [245, 158, 11] }
       ]
 
       metrics.forEach((metric) => {
@@ -470,14 +470,14 @@ Overall, you showed good potential and with some targeted practice on the mentio
               <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
               <circle 
                 cx="60" cy="60" r="50" fill="none" stroke="#06b6d4" strokeWidth="8"
-                strokeDasharray={`${(analysis?.overallScore || 75) * 3.14} 314`}
+                strokeDasharray={`${(analysis?.overallScore || 0) * 3.14} 314`}
                 strokeLinecap="round"
               />
             </svg>
             <div style={{
               position: 'absolute', fontSize: '1.5rem', fontWeight: 'bold', color: '#111827', textAlign: 'center'
             }}>
-              <div>{analysis?.overallScore || 75}</div>
+              <div>{analysis?.overallScore || 0}</div>
               <div style={{ fontSize: '0.875rem', color: '#6b7280', fontWeight: 'normal' }}>out of 100</div>
             </div>
           </div>
@@ -535,7 +535,7 @@ Overall, you showed good potential and with some targeted practice on the mentio
           }}>
             <BarChart3 size={32} color="#06b6d4" style={{ margin: '0 auto 1rem' }} />
             <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-              {analysis?.communicationScore || 78}/100
+              {analysis?.communicationScore || 0}/100
             </div>
             <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>Communication</p>
           </div>
@@ -546,7 +546,7 @@ Overall, you showed good potential and with some targeted practice on the mentio
           }}>
             <TrendingUp size={32} color="#10b981" style={{ margin: '0 auto 1rem' }} />
             <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-              {analysis?.confidenceScore || 82}/100
+              {analysis?.confidenceScore || 0}/100
             </div>
             <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>Confidence</p>
           </div>
@@ -557,7 +557,7 @@ Overall, you showed good potential and with some targeted practice on the mentio
           }}>
             <Award size={32} color="#f59e0b" style={{ margin: '0 auto 1rem' }} />
             <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-              {analysis?.relevanceScore || 85}/100
+              {analysis?.relevanceScore || 0}/100
             </div>
             <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>Relevance</p>
           </div>
