@@ -27,10 +27,12 @@ export default function VoiceInterview() {
       const parsedConfig = JSON.parse(config)
       setInterviewConfig(parsedConfig)
 
-    if ('webkitSpeechRecognition' in window) {
-      recognitionRef.current = new window.webkitSpeechRecognition()
-      recognitionRef.current.continuous = true
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition
+      recognitionRef.current = new SpeechRecognition()
+      recognitionRef.current.continuous = false // Changed to false to prevent network errors
       recognitionRef.current.interimResults = true
+      recognitionRef.current.maxAlternatives = 1
       
       recognitionRef.current.onresult = (event) => {
         if (isProcessing || isAISpeaking) return
@@ -41,7 +43,6 @@ export default function VoiceInterview() {
           .join('')
         
         if (event.results[event.results.length - 1].isFinal) {
-          recognitionRef.current.stop()
           setIsProcessing(true)
           setIsListening(false)
           handleUserResponse(transcript)
@@ -50,17 +51,38 @@ export default function VoiceInterview() {
       
       recognitionRef.current.onstart = () => {
         console.log('Speech recognition started')
+        setIsListening(true)
       }
       
       recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error)
         setIsListening(false)
         setIsProcessing(false)
+        
+        // Handle specific error types
+        if (event.error === 'network') {
+          console.warn('Network error - speech recognition requires internet connection')
+          alert('Speech recognition requires an active internet connection. Please check your connection and try again.')
+        } else if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+          console.error('Speech recognition error:', event.error)
+          alert('Microphone permission denied. Please allow microphone access in your browser settings.')
+        } else if (event.error === 'no-speech') {
+          // Don't log or show alert for no-speech, just silently handle it
+        } else if (event.error === 'aborted') {
+          // Don't log aborted errors
+        } else {
+          console.warn('Speech recognition error:', event.error)
+        }
       }
       
       recognitionRef.current.onend = () => {
+        console.log('Speech recognition ended')
         setIsListening(false)
+        // Don't auto-restart - user needs to manually click the button
+        // This prevents network errors from continuous mode
       }
+    } else {
+      console.error('Speech recognition not supported in this browser')
+      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.')
     }
 
       if (!hasStartedRef.current) {
@@ -165,14 +187,8 @@ Example for Software Engineering Technical:
             console.log('Routing to interview results...')
             router.push('/interview-results')
           }, 10000) // 10 second delay
-        } else {
-          // Normal behavior - start listening again
-          setTimeout(() => {
-            if (!isProcessing) {
-              startListening()
-            }
-          }, 500)
         }
+        // Removed auto-restart - user clicks mic button when ready to respond
       }
       
       audio.onerror = () => {
@@ -203,22 +219,57 @@ Example for Software Engineering Technical:
   }
 
   const startListening = async () => {
-    if (!recognitionRef.current || isListening || isProcessing || isAISpeaking) return
+    if (!recognitionRef.current || isListening || isProcessing || isAISpeaking) {
+      console.log('Cannot start listening:', { 
+        hasRecognition: !!recognitionRef.current, 
+        isListening, 
+        isProcessing, 
+        isAISpeaking 
+      })
+      return
+    }
     
     try {
+      // Request microphone permission first
       await navigator.mediaDevices.getUserMedia({ audio: true })
-      setIsListening(true)
+      
+      // Small delay to prevent rapid restarts
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Check state again after delay
+      if (isProcessing || isAISpeaking || isInterviewEnding) {
+        console.log('Aborting start - state changed during delay')
+        return
+      }
+      
       recognitionRef.current.start()
+      console.log('Speech recognition start called')
     } catch (error) {
-      console.error('Microphone access denied:', error)
-      alert('Please allow microphone access to use voice mode. Check your browser settings and try again.')
+      console.error('Error starting speech recognition:', error)
+      setIsListening(false)
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        alert('Microphone permission denied. Please allow microphone access in your browser settings and try again.')
+      } else if (error.name === 'InvalidStateError') {
+        // Recognition already started, just update state
+        console.log('Recognition already started')
+        setIsListening(true)
+      } else {
+        alert('Could not access microphone. Please check your browser settings and try again.')
+      }
     }
   }
 
   const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      setIsListening(false)
+    if (recognitionRef.current && isListening) {
+      try {
+        recognitionRef.current.stop()
+        setIsListening(false)
+        console.log('Speech recognition stopped')
+      } catch (error) {
+        console.error('Error stopping recognition:', error)
+        setIsListening(false)
+      }
     }
   }
 
@@ -233,21 +284,22 @@ Example for Software Engineering Technical:
       localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
       
       setTimeout(() => {
-        generateAIResponse(transcript, updatedMessages)
+        generateAIResponse(updatedMessages)
       }, 500)
     } else {
       setIsProcessing(false)
     }
   }
 
-  const generateAIResponse = async (userResponse, currentMessages = messages) => {
+  const generateAIResponse = async (currentMessages = messages) => {
     try {
+      // Count user messages to determine if we should end
+      const userMessageCount = currentMessages.filter(m => m.role === 'user').length
       console.log('=== Generating AI Response ===')
-      console.log('User said:', userResponse)
-      console.log('Current question:', currentQuestion)
+      console.log('User message count:', userMessageCount)
       console.log('Sending messages:', currentMessages)
       
-      const isRequestingClosing = currentQuestion >= 6
+      const isRequestingClosing = userMessageCount >= 6
       
       const requestBody = { 
         messages: currentMessages,
@@ -280,24 +332,27 @@ Example for Software Engineering Technical:
       console.log('AI will say:', aiResponse)
       
       setMessages(prev => [...prev, { role: "assistant", content: aiResponse }])
-      const newConversation = [...conversation, { type: 'user', text: userResponse }, { type: 'ai', text: aiResponse }]
+      const newConversation = [...conversation, { type: 'ai', text: aiResponse }]
       setConversation(newConversation)
       
       localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
       
-      speakText(aiResponse, currentQuestion >= 6)
+      const isFinalQuestion = userMessageCount >= 6
+      speakText(aiResponse, isFinalQuestion)
       
-      if (currentQuestion < 6) {
-        setCurrentQuestion(prev => prev + 1)
-      } else {
+      if (isFinalQuestion) {
         setIsInterviewEnding(true)
         console.log('Final question reached - waiting for audio to finish before routing')
       }
       
+      setCurrentQuestion(userMessageCount + 1)
+      
     } catch (err) {
       console.error("AI Response Generation Failed:", err)
       
-      if (currentQuestion >= 6) {
+      const userMessageCount = currentMessages.filter(m => m.role === 'user').length
+      
+      if (userMessageCount >= 6) {
         const userMessages = messages.filter(m => m.role === 'user')
         const firstMessage = userMessages[0]?.content?.toLowerCase() || ""
         
@@ -313,7 +368,7 @@ Example for Software Engineering Technical:
           : "Thank you so much! That concludes our interview. Let me analyze our conversation and prepare your results. You did wonderfully!"
         
         setMessages(prev => [...prev, { role: "assistant", content: closingResponse }])
-        const newConversation = [...conversation, { type: 'user', text: userResponse }, { type: 'ai', text: closingResponse }]
+        const newConversation = [...conversation, { type: 'ai', text: closingResponse }]
         setConversation(newConversation)
         
         localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
@@ -322,16 +377,34 @@ Example for Software Engineering Technical:
         setIsInterviewEnding(true)
         console.log('Final question fallback - waiting for audio to finish')
       } else {
-        const simpleResponse = "I see. What else would you like to share?"
+        // Generate contextual fallback response based on last user message
+        const lastUserMessage = currentMessages.filter(m => m.role === 'user').pop()
+        const userText = lastUserMessage?.content?.toLowerCase() || ''
+        const wordCount = userText.split(/\s+/).length
         
-        setMessages(prev => [...prev, { role: "assistant", content: simpleResponse }])
-        const newConversation = [...conversation, { type: 'user', text: userResponse }, { type: 'ai', text: simpleResponse }]
+        let contextualResponse
+        if (wordCount < 5) {
+          contextualResponse = "Can you provide more details about that?"
+        } else if (userText.includes("project") || userText.includes("work")) {
+          contextualResponse = "What was your role in that project?"
+        } else if (userText.includes("team") || userText.includes("collaborate")) {
+          contextualResponse = "How do you handle team conflicts?"
+        } else if (userText.includes("challenge") || userText.includes("difficult")) {
+          contextualResponse = "What did you learn from that challenge?"
+        } else if (userText.includes("yes") || userText.includes("yeah")) {
+          contextualResponse = "Can you give me a specific example?"
+        } else if (userText.includes("no") || userText.includes("not really")) {
+          contextualResponse = "What motivates you professionally?"
+        } else {
+          contextualResponse = "How did that experience shape your approach to work?"
+        }
+        
+        setMessages(prev => [...prev, { role: "assistant", content: contextualResponse }])
+        const newConversation = [...conversation, { type: 'ai', text: contextualResponse }]
         setConversation(newConversation)
         
         localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
-        speakText(simpleResponse, false)
-        
-        setCurrentQuestion(prev => prev + 1)
+        speakText(contextualResponse, false)
       }
     } finally {
       setIsProcessing(false)
@@ -413,7 +486,7 @@ Example for Software Engineering Technical:
             </h1>
           </div>
           <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-            {isInterviewEnding ? 'Interview Completed - Preparing Results...' : `Question ${currentQuestion} of 6`}
+            {isInterviewEnding ? 'Interview Completed - Preparing Results...' : `Question ${messages.filter(m => m.role === 'user').length + 1} of 6`}
           </div>
         </div>
       </div>

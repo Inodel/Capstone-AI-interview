@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request) {
   try {
-    const { messages, isClosingStatement = false, interviewConfig = {} } = await request.json()
+    const { messages, isClosingStatement = false, interviewConfig } = await request.json()
     console.log('=== Chat API Called ===')
     console.log('Messages:', messages)
+    console.log('Interview Config:', interviewConfig)
     console.log('Is closing statement:', isClosingStatement)
     if (isClosingStatement) {
       const userMessages = messages.filter(m => m.role === 'user')
@@ -48,18 +49,37 @@ export async function POST(request) {
       
       return NextResponse.json({ response: randomClosing })
     }
-    const category = interviewConfig.category || 'general'
-    const interviewType = interviewConfig.interviewType || 'behavioral'
-    const difficulty = interviewConfig.difficulty || 'intermediate'
+    
+    // Handle null or undefined interviewConfig
+    const category = interviewConfig?.category || 'general'
+    const interviewType = interviewConfig?.interviewType || 'behavioral'
+    const difficulty = interviewConfig?.difficulty || 'intermediate'
     const categoryName = category.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
     
     const difficultyPrompts = {
-      beginner: 'Ask simple, entry-level questions.',
-      intermediate: 'Ask moderate complexity questions.',
-      advanced: 'Ask challenging, senior-level questions.'
+      beginner: 'Ask simple, entry-level questions suitable for beginners.',
+      intermediate: 'Ask moderate complexity questions for mid-level professionals.',
+      advanced: 'Ask challenging, senior-level questions requiring deep expertise.'
     }
     
-    const systemPrompt = `You are a ${categoryName} interviewer conducting a ${interviewType} interview. ${difficultyPrompts[difficulty]} ONLY ask questions about ${categoryName}. Keep responses under 30 words.`
+    const systemPrompt = `You are a PROFESSIONAL ${categoryName.toUpperCase()} INTERVIEWER conducting a ${interviewType.toUpperCase()} interview.
+
+CRITICAL RULES:
+1. YOU ARE THE INTERVIEWER - NEVER answer as the candidate
+2. ONLY ask interview questions related to ${categoryName}
+3. ${difficultyPrompts[difficulty]}
+4. Ask follow-up questions based on the candidate's previous responses
+5. Keep your questions concise (under 40 words)
+6. NEVER provide example answers or respond as if you are the candidate
+7. Stay in character as the interviewer at all times
+
+Your role: Ask thoughtful ${interviewType} questions about ${categoryName} and listen to the candidate's responses.`
+    
+    // Check if messages already has a system prompt from voice mode
+    const hasSystemPrompt = messages[0]?.role === 'system'
+    const messagesToSend = hasSystemPrompt 
+      ? messages  // Use existing system prompt from voice mode
+      : [{ role: "system", content: systemPrompt }, ...messages]  // Add system prompt for chat mode
     
     const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
       method: "POST",
@@ -69,13 +89,7 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         model: "deepseek-ai/DeepSeek-V3.1",
-        messages: [
-          { 
-            role: "system", 
-            content: systemPrompt
-          },
-          ...messages.slice(1)
-        ],
+        messages: messagesToSend,
         max_tokens: 60,
         temperature: 0.7,
       }),
@@ -93,14 +107,23 @@ export async function POST(request) {
       //=================================================
       const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || ""
       
-      if (lastMessage.includes("freelance") && lastMessage.includes("developer")) {
-        return NextResponse.json({ response: "What kind of projects do you work on as a freelance developer?" })
-      } else if (lastMessage.includes("no")) {
-        return NextResponse.json({ response: "That's okay. What motivates you in your work?" })
-      } else if (lastMessage.includes("dreadful")) {
-        return NextResponse.json({ response: "What made it challenging? How did you overcome those difficulties?" })
+      // More contextual fallback responses based on message content
+      const messageWords = lastMessage.split(/\s+/)
+      
+      if (lastMessage.includes("freelance") || lastMessage.includes("developer")) {
+        return NextResponse.json({ response: "What technologies do you specialize in?" })
+      } else if (lastMessage.includes("yes") || lastMessage.includes("yeah") || lastMessage.includes("sure")) {
+        return NextResponse.json({ response: "Great! Can you give me a specific example?" })
+      } else if (lastMessage.includes("no") || lastMessage.includes("not really") || lastMessage.includes("nope")) {
+        return NextResponse.json({ response: "I see. What would you say drives your professional growth?" })
+      } else if (lastMessage.includes("project") || lastMessage.includes("work")) {
+        return NextResponse.json({ response: "What challenges did you face in that project?" })
+      } else if (lastMessage.includes("team") || lastMessage.includes("collaborate")) {
+        return NextResponse.json({ response: "How do you handle disagreements in a team?" })
+      } else if (messageWords.length < 5) {
+        return NextResponse.json({ response: "Could you elaborate on that a bit more?" })
       } else {
-        return NextResponse.json({ response: "I understand. Can you tell me more about your experience?" })
+        return NextResponse.json({ response: "Interesting. How did that experience shape your approach?" })
       }
     }
 
@@ -110,22 +133,41 @@ export async function POST(request) {
     if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
       let aiResponse = data.choices[0].message.content.trim()
       console.log('AI Response:', aiResponse)
+      // Check if AI is incorrectly responding as the candidate
       if (aiResponse.toLowerCase().includes("i am") || aiResponse.toLowerCase().includes("i'm a") || aiResponse.toLowerCase().includes("my name is")) {
         const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || ""
-        if (lastMessage.includes("freelance")) {
-          aiResponse = "What programming languages do you specialize in?"
-        } else if (lastMessage.includes("no")) {
-          aiResponse = "What would you say is your biggest strength?"
+        const messageWords = lastMessage.split(/\s+/)
+        
+        if (lastMessage.includes("freelance") || lastMessage.includes("developer")) {
+          aiResponse = "What kind of projects do you enjoy working on most?"
+        } else if (lastMessage.includes("yes") || lastMessage.includes("yeah")) {
+          aiResponse = "Tell me more about your experience with that."
+        } else if (lastMessage.includes("no") || lastMessage.includes("not really")) {
+          aiResponse = "What would you say is your biggest professional strength?"
+        } else if (lastMessage.includes("project") || lastMessage.includes("work")) {
+          aiResponse = "What was your specific role in that project?"
+        } else if (messageWords.length < 5) {
+          aiResponse = "Can you provide more details about that?"
         } else {
-          aiResponse = "That's interesting. Can you elaborate on that?"
+          aiResponse = "How did that experience impact your career development?"
         }
-      } 
+      }
       return NextResponse.json({ response: aiResponse })
     }
-    console.log('No valid response from API, using fallback')
-    return NextResponse.json({ response: "I see. What else can you share about that?" })
+    console.log('No valid response from API, using contextual fallback')
+    const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || ""
+    const messageWords = lastMessage.split(/\s+/)
+    
+    // Generate contextual fallback based on message length and content
+    if (messageWords.length < 5) {
+      return NextResponse.json({ response: "Could you expand on that answer?" })
+    } else if (lastMessage.includes("work") || lastMessage.includes("project")) {
+      return NextResponse.json({ response: "What was the outcome of that work?" })
+    } else {
+      return NextResponse.json({ response: "How would you approach a similar situation in the future?" })
+    }
   } catch (error) {
     console.error('Complete Chat API Failure:', error)
-    return NextResponse.json({ response: "That's interesting. What else would you like to tell me?" })
+    return NextResponse.json({ response: "Could you tell me more about your experience?" })
   }
 }
