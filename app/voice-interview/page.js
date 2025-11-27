@@ -15,9 +15,14 @@ export default function VoiceInterview() {
   const [isChatMode, setIsChatMode] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [isInterviewEnding, setIsInterviewEnding] = useState(false)
+  const [isWaitingForMoreSpeech, setIsWaitingForMoreSpeech] = useState(false)
   const recognitionRef = useRef(null)
   const currentAudioRef = useRef(null)
   const hasStartedRef = useRef(false)
+  const silenceTimeoutRef = useRef(null)
+  const accumulatedTranscriptRef = useRef('')
+  const lastSpeechTimeRef = useRef(null)
+  const SILENCE_THRESHOLD_MS = 3500 // 3.5 seconds of silence before processing
   
 
 
@@ -42,10 +47,44 @@ export default function VoiceInterview() {
           .map(result => result.transcript)
           .join('')
         
+        // Update last speech time whenever we receive any result
+        lastSpeechTimeRef.current = Date.now()
+        
+        // Clear any existing silence timeout
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current)
+          silenceTimeoutRef.current = null
+        }
+        
         if (event.results[event.results.length - 1].isFinal) {
-          setIsProcessing(true)
-          setIsListening(false)
-          handleUserResponse(transcript)
+          // Accumulate the final transcript
+          accumulatedTranscriptRef.current = transcript
+          
+          // Show waiting indicator
+          setIsWaitingForMoreSpeech(true)
+          
+          // Start silence countdown - wait 3.5 seconds before processing
+          // This gives user time to continue speaking after a brief pause
+          silenceTimeoutRef.current = setTimeout(() => {
+            const finalTranscript = accumulatedTranscriptRef.current
+            setIsWaitingForMoreSpeech(false)
+            if (finalTranscript.trim()) {
+              console.log('Silence threshold reached, processing response:', finalTranscript)
+              setIsProcessing(true)
+              setIsListening(false)
+              if (recognitionRef.current) {
+                try {
+                  recognitionRef.current.stop()
+                } catch (e) {
+                  // Ignore stop errors
+                }
+              }
+              handleUserResponse(finalTranscript)
+              accumulatedTranscriptRef.current = ''
+            }
+          }, SILENCE_THRESHOLD_MS)
+          
+          console.log('Final result received, waiting', SILENCE_THRESHOLD_MS, 'ms for more speech...')
         }
       }
       
@@ -76,9 +115,24 @@ export default function VoiceInterview() {
       
       recognitionRef.current.onend = () => {
         console.log('Speech recognition ended')
-        setIsListening(false)
-        // Don't auto-restart - user needs to manually click the button
-        // This prevents network errors from continuous mode
+        
+        // If we have accumulated transcript and silence timeout is pending,
+        // auto-restart recognition to continue listening for more speech
+        if (accumulatedTranscriptRef.current && silenceTimeoutRef.current && !isProcessing && !isAISpeaking && !isInterviewEnding) {
+          console.log('Auto-restarting recognition to continue listening...')
+          try {
+            setTimeout(() => {
+              if (recognitionRef.current && !isProcessing && !isAISpeaking) {
+                recognitionRef.current.start()
+              }
+            }, 100)
+          } catch (e) {
+            console.log('Could not restart recognition:', e)
+            setIsListening(false)
+          }
+        } else {
+          setIsListening(false)
+        }
       }
     } else {
       console.error('Speech recognition not supported in this browser')
@@ -126,6 +180,9 @@ Example for Software Engineering Technical:
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop()
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current)
       }
     }
   }, [])
@@ -263,9 +320,27 @@ Example for Software Engineering Technical:
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
       try {
-        recognitionRef.current.stop()
-        setIsListening(false)
-        console.log('Speech recognition stopped')
+        // Clear silence timeout
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current)
+          silenceTimeoutRef.current = null
+        }
+        setIsWaitingForMoreSpeech(false)
+        
+        // If there's accumulated transcript, process it immediately
+        if (accumulatedTranscriptRef.current.trim()) {
+          const finalTranscript = accumulatedTranscriptRef.current
+          accumulatedTranscriptRef.current = ''
+          setIsProcessing(true)
+          setIsListening(false)
+          recognitionRef.current.stop()
+          handleUserResponse(finalTranscript)
+          console.log('Speech recognition stopped - processing accumulated transcript')
+        } else {
+          recognitionRef.current.stop()
+          setIsListening(false)
+          console.log('Speech recognition stopped')
+        }
       } catch (error) {
         console.error('Error stopping recognition:', error)
         setIsListening(false)
@@ -419,6 +494,11 @@ Example for Software Engineering Technical:
       currentAudioRef.current.pause()
       currentAudioRef.current = null
     }
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
+    }
+    accumulatedTranscriptRef.current = ''
     setIsProcessing(false)
     router.push('/interview-results')
   }
@@ -510,31 +590,38 @@ Example for Software Engineering Technical:
         </div>
 
         {/* Status Text */}
-        <div style={{ fontSize: '1.125rem', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-          {isAISpeaking ? (
-            <>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#06b6d4">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-              </svg>
-              <span style={{ color: '#06b6d4' }}>AI is speaking...</span>
-            </>
-          ) : isListening ? (
-            <>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#ef4444">
-                <path d="M12 1a3 3 0 0 1 3 3v8a3 3 0 0 1-6 0V4a3 3 0 0 1 3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23" stroke="#ef4444" strokeWidth="2"/>
-                <line x1="8" y1="23" x2="16" y2="23" stroke="#ef4444" strokeWidth="2"/>
-              </svg>
-              <span style={{ color: '#ef4444' }}>Listening to your response...</span>
-            </>
-          ) : (
-            <>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#10b981">
-                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              <span style={{ color: '#10b981' }}>Ready for next interaction</span>
-            </>
+        <div style={{ fontSize: '1.125rem', color: '#374151', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {isAISpeaking ? (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#06b6d4">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <span style={{ color: '#06b6d4' }}>AI is speaking...</span>
+              </>
+            ) : isListening ? (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#ef4444">
+                  <path d="M12 1a3 3 0 0 1 3 3v8a3 3 0 0 1-6 0V4a3 3 0 0 1 3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23" stroke="#ef4444" strokeWidth="2"/>
+                  <line x1="8" y1="23" x2="16" y2="23" stroke="#ef4444" strokeWidth="2"/>
+                </svg>
+                <span style={{ color: '#ef4444' }}>Listening to your response...</span>
+              </>
+            ) : (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#10b981">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span style={{ color: '#10b981' }}>Ready for next interaction</span>
+              </>
+            )}
+          </div>
+          {isWaitingForMoreSpeech && isListening && (
+            <span style={{ fontSize: '0.875rem', color: '#f59e0b', fontStyle: 'italic' }}>
+              Continue speaking or wait 3.5s to submit...
+            </span>
           )}
         </div>
 

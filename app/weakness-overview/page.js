@@ -835,6 +835,204 @@ export default function WeaknessOverview() {
               </div>
             </div>
 
+            {/* Enhancement Resources */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              padding: '2rem',
+              marginBottom: '2rem'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                marginBottom: '1rem' 
+              }}>
+                <div>
+                  <img 
+                    src="/assets/images/candidate.PNG" 
+                    alt="Candidate Resources"
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      marginRight: '0.5rem',
+                      verticalAlign: 'middle'
+                    }}
+                  />
+                </div>
+                <h2 style={{ 
+                  fontSize: '1.5rem', 
+                  fontWeight: 'bold', 
+                  margin: 0,
+                  color: '#1f2937',
+                  display: 'inline-block',
+                  verticalAlign: 'middle'
+                }}>
+                  Candidate Weakness Enhancement Resources
+                </h2>
+              </div>
+              <p style={{ 
+                color: '#6b7280', 
+                marginBottom: '1.5rem',
+                fontSize: '0.95rem'
+              }}>
+                Access curated videos and learning materials designed to help candidates overcome their weaknesses and improve their interview performance.
+              </p>
+
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+                gap: '1.5rem' 
+              }}>
+                <div
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+                    <iframe 
+                      src="https://www.youtube.com/embed/NQrUJBOcgJc" 
+                      title="YouTube video player" 
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                      frameBorder="0" 
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                      referrerpolicy="strict-origin-when-cross-origin" 
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                  <div style={{ padding: '1.5rem' }}>
+                    <h3 style={{
+                      fontSize: '1.1rem',
+                      fontWeight: '600',
+                      margin: '0 0 0.5rem 0',
+                      color: '#1f2937'
+                    }}>
+                      Communication Skills Workshop
+                    </h3>
+                    <p style={{
+                      color: '#6b7280',
+                      fontSize: '0.9rem',
+                      margin: 0,
+                      lineHeight: '1.5'
+                    }}>
+                      Enhance your verbal and written communication abilities
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+                    <iframe 
+                      src="https://www.youtube.com/embed/UX_dxcjp5Gw" 
+                      title="YouTube video player" 
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                      frameBorder="0" 
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                      referrerpolicy="strict-origin-when-cross-origin" 
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                  <div style={{ padding: '1.5rem' }}>
+                    <h3 style={{
+                      fontSize: '1.1rem',
+                      fontWeight: '600',
+                      margin: '0 0 0.5rem 0',
+                      color: '#1f2937'
+                    }}>
+                      Leadership Development Program
+                    </h3>
+                    <p style={{
+                      color: '#6b7280',
+                      fontSize: '0.9rem',
+                      margin: 0,
+                      lineHeight: '1.5'
+                    }}>
+                      Build confidence in leading teams and projects
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+                    <iframe 
+                      src="https://www.youtube.com/embed/AIz7ODolyg4" 
+                      title="YouTube video player" 
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                      frameBorder="0" 
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                      referrerpolicy="strict-origin-when-cross-origin" 
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                  <div style={{ padding: '1.5rem' }}>
+                    <h3 style={{
+                      fontSize: '1.1rem',
+                      fontWeight: '600',
+                      margin: '0 0 0.5rem 0',
+                      color: '#1f2937'
+                    }}>
+                      Interview Confidence Building
+                    </h3>
+                    <p style={{
+                      color: '#6b7280',
+                      fontSize: '0.9rem',
+                      margin: 0,
+                      lineHeight: '1.5'
+                    }}>
+                      Master the art of presenting your strengths effectively
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Personalized Improvement Plan */}
             <div style={{
               backgroundColor: 'white',
