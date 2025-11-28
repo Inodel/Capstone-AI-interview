@@ -27,9 +27,6 @@ export default function InterviewResults() {
 
   const analyzeInterview = async () => {
     try {
-      const storedConversation = JSON.parse(localStorage.getItem('interview_conversation') || '[]')
-      setConversation(storedConversation)
-      
       // Get user ID from Firebase Auth or fallback to JWT
       let userId = user?.uid
       
@@ -52,20 +49,63 @@ export default function InterviewResults() {
         }
       }
       
-      console.log('Saving interview with userId:', userId)
+      // Try to get conversation and config from Firebase first
+      let interviewConversation = []
+      let interviewConfig = null
+      const sessionId = sessionStorage.getItem('currentInterviewSessionId')
+      
+      if (sessionId && userId) {
+        console.log('Fetching conversation from Firebase, session:', sessionId)
+        try {
+          const sessionResponse = await fetch(`/api/interviews/session?sessionId=${sessionId}`)
+          if (sessionResponse.ok) {
+            const sessionData = await sessionResponse.json()
+            if (sessionData.session?.conversation?.length > 0) {
+              interviewConversation = sessionData.session.conversation
+              interviewConfig = sessionData.session.interviewConfig
+              console.log('Loaded conversation from Firebase:', interviewConversation.length, 'messages')
+              console.log('Loaded config from Firebase:', interviewConfig)
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching from Firebase:', err)
+        }
+      }
+      
+      // Fallback to localStorage/sessionStorage if Firebase didn't have data
+      if (interviewConversation.length === 0) {
+        interviewConversation = JSON.parse(localStorage.getItem('interview_conversation') || '[]')
+        console.log('Loaded conversation from localStorage fallback:', interviewConversation.length, 'messages')
+      }
+      
+      // Get config from sessionStorage if not from Firebase
+      if (!interviewConfig) {
+        const storedConfig = sessionStorage.getItem('interviewConfig')
+        if (storedConfig) {
+          interviewConfig = JSON.parse(storedConfig)
+          console.log('Loaded config from sessionStorage:', interviewConfig)
+        }
+      }
+      
+      console.log('User responses:', interviewConversation.filter(m => m.type === 'user').length)
+      setConversation(interviewConversation)
+      
+      console.log('Analyzing interview with userId:', userId, 'Config:', interviewConfig)
       
       const response = await fetch('/api/interviews/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          conversation: storedConversation,
-          userId: userId
+          conversation: interviewConversation,
+          userId: userId,
+          sessionId: sessionId,
+          interviewConfig: interviewConfig
         })
       })
       const data = await response.json()
       setAnalysis(data.analysis)
       setTimeout(() => {
-        generateVoiceSummary(data.analysis, storedConversation)
+        generateVoiceSummary(data.analysis, interviewConversation)
       }, 1500)
       
     } catch (error) {

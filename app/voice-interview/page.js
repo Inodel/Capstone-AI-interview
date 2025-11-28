@@ -2,9 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Mic, MicOff, Square } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function VoiceInterview() {
   const router = useRouter()
+  const { user } = useAuth()
   const [isListening, setIsListening] = useState(false)
   const [isAISpeaking, setIsAISpeaking] = useState(false)
   const [currentQuestion, setCurrentQuestion] = useState(1)
@@ -16,13 +18,90 @@ export default function VoiceInterview() {
   const [textInput, setTextInput] = useState('')
   const [isInterviewEnding, setIsInterviewEnding] = useState(false)
   const [isWaitingForMoreSpeech, setIsWaitingForMoreSpeech] = useState(false)
+  const [sessionId, setSessionId] = useState(null)
   const recognitionRef = useRef(null)
   const currentAudioRef = useRef(null)
   const hasStartedRef = useRef(false)
   const silenceTimeoutRef = useRef(null)
   const accumulatedTranscriptRef = useRef('')
   const lastSpeechTimeRef = useRef(null)
+  const conversationRef = useRef([]) // Track latest conversation to avoid stale closures
+  const messagesRef = useRef([]) // Track latest messages to avoid stale closures
+  const sessionIdRef = useRef(null) // Track session ID for Firebase
   const SILENCE_THRESHOLD_MS = 3500 // 3.5 seconds of silence before processing
+  
+  // Save conversation to Firebase in real-time
+  const saveToFirebase = async (newConversation, action = 'update') => {
+    if (!sessionIdRef.current || !user?.uid) {
+      console.log('Cannot save to Firebase - no session or user')
+      // Fallback to localStorage
+      localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
+      return
+    }
+    
+    console.log('Saving to Firebase with config:', interviewConfig)
+    
+    try {
+      const response = await fetch('/api/interviews/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          userId: user.uid,
+          conversation: newConversation,
+          interviewConfig: interviewConfig,
+          action: action
+        })
+      })
+      
+      if (response.ok) {
+        console.log('Saved to Firebase:', action, newConversation.length, 'messages')
+      } else {
+        console.error('Firebase save failed, using localStorage fallback')
+        localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
+      }
+    } catch (error) {
+      console.error('Firebase save error:', error)
+      localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
+    }
+  }
+  
+  // Create a new Firebase session
+  const createFirebaseSession = async (config) => {
+    if (!user?.uid) {
+      console.log('No user, skipping Firebase session creation')
+      return null
+    }
+    
+    const newSessionId = `interview_${user.uid}_${Date.now()}`
+    
+    try {
+      const response = await fetch('/api/interviews/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: newSessionId,
+          userId: user.uid,
+          conversation: [],
+          interviewConfig: config,
+          action: 'create'
+        })
+      })
+      
+      if (response.ok) {
+        console.log('Created Firebase session:', newSessionId)
+        sessionIdRef.current = newSessionId
+        setSessionId(newSessionId)
+        // Store session ID for results page
+        sessionStorage.setItem('currentInterviewSessionId', newSessionId)
+        return newSessionId
+      }
+    } catch (error) {
+      console.error('Failed to create Firebase session:', error)
+    }
+    
+    return null
+  }
   
 
 
@@ -169,7 +248,10 @@ Example for Software Engineering Technical:
 "Explain the time complexity of your solution."
 "How would you optimize this code?"`
         
-        setMessages([{ role: "system", content: systemPrompt }])
+        // Initialize messages with system prompt - update both state and ref
+        const initialMessages = [{ role: "system", content: systemPrompt }]
+        messagesRef.current = initialMessages
+        setMessages(initialMessages)
         
         setTimeout(() => {
           startInterview(parsedConfig)
@@ -187,10 +269,13 @@ Example for Software Engineering Technical:
     }
   }, [])
 
-  const startInterview = (config) => {
+  const startInterview = async (config) => {
     const category = config?.category || 'general'
     const categoryName = category.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
     const interviewType = config?.interviewType || 'behavioral'
+    
+    // Create Firebase session first
+    await createFirebaseSession(config)
     
     const greeting = `Hello! Welcome to your ${interviewType} interview for ${categoryName}. I'm your AI interviewer today. Let's begin with our first question. Tell me about yourself and why you're interested in this position.`
     
@@ -201,10 +286,17 @@ Example for Software Engineering Technical:
         interviewConfig: config
       }
     ]
-    setConversation(initialConversation)
-    setMessages(prev => [...prev, { role: "assistant", content: greeting }])
     
-    localStorage.setItem('interview_conversation', JSON.stringify(initialConversation))
+    // Update both state and refs
+    conversationRef.current = initialConversation
+    setConversation(initialConversation)
+    
+    const updatedMessages = [...messagesRef.current, { role: "assistant", content: greeting }]
+    messagesRef.current = updatedMessages
+    setMessages(updatedMessages)
+    
+    // Save to Firebase (with localStorage fallback)
+    await saveToFirebase(initialConversation, 'update')
     
     speakText(greeting)
   }
@@ -348,25 +440,33 @@ Example for Software Engineering Technical:
     }
   }
 
-  const handleUserResponse = (transcript) => {
+  const handleUserResponse = async (transcript) => {
     if (transcript.trim()) {
-      const newConversation = [...conversation, { type: 'user', text: transcript }]
+      // Use refs to get latest state and avoid stale closures
+      const newConversation = [...conversationRef.current, { type: 'user', text: transcript }]
+      conversationRef.current = newConversation
       setConversation(newConversation)
       
-      const updatedMessages = [...messages, { role: "user", content: transcript }]
+      const updatedMessages = [...messagesRef.current, { role: "user", content: transcript }]
+      messagesRef.current = updatedMessages
       setMessages(updatedMessages)
       
-      localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
+      // Count how many questions the user has answered
+      const answeredCount = updatedMessages.filter(m => m.role === 'user').length
+      console.log('User has answered', answeredCount, 'questions')
+      
+      // Save to Firebase in real-time
+      await saveToFirebase(newConversation, 'update')
       
       setTimeout(() => {
-        generateAIResponse(updatedMessages)
+        generateAIResponse(updatedMessages, newConversation)
       }, 500)
     } else {
       setIsProcessing(false)
     }
   }
 
-  const generateAIResponse = async (currentMessages = messages) => {
+  const generateAIResponse = async (currentMessages = messagesRef.current, currentConversation = conversationRef.current) => {
     try {
       // Count user messages to determine if we should end
       const userMessageCount = currentMessages.filter(m => m.role === 'user').length
@@ -406,13 +506,21 @@ Example for Software Engineering Technical:
       const aiResponse = data.response
       console.log('AI will say:', aiResponse)
       
-      setMessages(prev => [...prev, { role: "assistant", content: aiResponse }])
-      const newConversation = [...conversation, { type: 'ai', text: aiResponse }]
+      // Update messages with AI response
+      const updatedMessages = [...currentMessages, { role: "assistant", content: aiResponse }]
+      messagesRef.current = updatedMessages
+      setMessages(updatedMessages)
+      
+      // Update conversation with AI response
+      const newConversation = [...currentConversation, { type: 'ai', text: aiResponse }]
+      conversationRef.current = newConversation
       setConversation(newConversation)
       
-      localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
-      
       const isFinalQuestion = userMessageCount >= 6
+      
+      // Save to Firebase - mark as complete if final question
+      await saveToFirebase(newConversation, isFinalQuestion ? 'complete' : 'update')
+      
       speakText(aiResponse, isFinalQuestion)
       
       if (isFinalQuestion) {
@@ -420,6 +528,7 @@ Example for Software Engineering Technical:
         console.log('Final question reached - waiting for audio to finish before routing')
       }
       
+      // Question counter shows next question number (userMessageCount + 1)
       setCurrentQuestion(userMessageCount + 1)
       
     } catch (err) {
@@ -428,7 +537,7 @@ Example for Software Engineering Technical:
       const userMessageCount = currentMessages.filter(m => m.role === 'user').length
       
       if (userMessageCount >= 6) {
-        const userMessages = messages.filter(m => m.role === 'user')
+        const userMessages = currentMessages.filter(m => m.role === 'user')
         const firstMessage = userMessages[0]?.content?.toLowerCase() || ""
         
         let userName = ""
@@ -442,11 +551,18 @@ Example for Software Engineering Technical:
           ? `Thank you so much, ${userName}! That concludes our interview. Let me analyze our conversation and prepare your results. You did wonderfully!`
           : "Thank you so much! That concludes our interview. Let me analyze our conversation and prepare your results. You did wonderfully!"
         
-        setMessages(prev => [...prev, { role: "assistant", content: closingResponse }])
-        const newConversation = [...conversation, { type: 'ai', text: closingResponse }]
+        // Update messages with closing response
+        const updatedMessages = [...currentMessages, { role: "assistant", content: closingResponse }]
+        messagesRef.current = updatedMessages
+        setMessages(updatedMessages)
+        
+        // Update conversation with closing response
+        const newConversation = [...currentConversation, { type: 'ai', text: closingResponse }]
+        conversationRef.current = newConversation
         setConversation(newConversation)
         
-        localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
+        // Save to Firebase as complete
+        await saveToFirebase(newConversation, 'complete')
         speakText(closingResponse, true) // Final question flag
         
         setIsInterviewEnding(true)
@@ -474,19 +590,29 @@ Example for Software Engineering Technical:
           contextualResponse = "How did that experience shape your approach to work?"
         }
         
-        setMessages(prev => [...prev, { role: "assistant", content: contextualResponse }])
-        const newConversation = [...conversation, { type: 'ai', text: contextualResponse }]
+        // Update messages with fallback response
+        const updatedMessages = [...currentMessages, { role: "assistant", content: contextualResponse }]
+        messagesRef.current = updatedMessages
+        setMessages(updatedMessages)
+        
+        // Update conversation with fallback response
+        const newConversation = [...currentConversation, { type: 'ai', text: contextualResponse }]
+        conversationRef.current = newConversation
         setConversation(newConversation)
         
-        localStorage.setItem('interview_conversation', JSON.stringify(newConversation))
+        // Save to Firebase
+        await saveToFirebase(newConversation, 'update')
         speakText(contextualResponse, false)
+        
+        // Update question counter
+        setCurrentQuestion(userMessageCount + 1)
       }
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const endInterview = () => {
+  const endInterview = async () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop()
     }
@@ -500,6 +626,14 @@ Example for Software Engineering Technical:
     }
     accumulatedTranscriptRef.current = ''
     setIsProcessing(false)
+    
+    // Save to Firebase as complete before navigating
+    const currentConversation = conversationRef.current
+    if (currentConversation.length > 0) {
+      await saveToFirebase(currentConversation, 'complete')
+      console.log('Saved conversation to Firebase before ending:', currentConversation.length, 'messages')
+    }
+    
     router.push('/interview-results')
   }
 
@@ -566,7 +700,7 @@ Example for Software Engineering Technical:
             </h1>
           </div>
           <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-            {isInterviewEnding ? 'Interview Completed - Preparing Results...' : `Question ${messages.filter(m => m.role === 'user').length + 1} of 6`}
+            {isInterviewEnding ? 'Interview Completed - Preparing Results...' : `Question ${Math.min(currentQuestion, 6)} of 6`}
           </div>
         </div>
       </div>

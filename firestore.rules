@@ -23,6 +23,18 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
     
+    // Live interview sessions - real-time conversation storage
+    match /interview_sessions_live/{sessionId} {
+      // Allow read if userId matches
+      allow read: if request.auth != null;
+      // Allow create if userId is provided
+      allow create: if request.resource.data.userId != null;
+      // Allow update if userId matches
+      allow update: if request.auth != null;
+      // Allow delete if userId matches
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
     // Password reset tokens - allow creation, but only read if not expired
     match /password_reset_tokens/{tokenId} {
       allow create: if true;

@@ -13,7 +13,9 @@ import {
   ChevronDown,
   ChevronRight,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  AlertTriangle,
+  X
 } from 'lucide-react'
 import { useAuth } from '../app/contexts/AuthContext'
 import ChatBubbleLogo from './ChatBubbleLogo'
@@ -23,6 +25,7 @@ export default function Sidebar({ activeItem }) {
   const { logout } = useAuth()
   const isSubItemActive = activeItem === 'strengths-overview' || activeItem === 'weakness-overview'
   const [isPastInterviewsExpanded, setIsPastInterviewsExpanded] = useState(isSubItemActive)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   useEffect(() => {
     if (isSubItemActive) {
@@ -67,13 +70,22 @@ export default function Sidebar({ activeItem }) {
     }
   }
 
-  const handleLogout = async () => {
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true)
+  }
+
+  const handleLogoutConfirm = async () => {
     try {
+      setShowLogoutModal(false)
       await logout()
       router.push('/login')
     } catch (error) {
       console.error('Logout error:', error)
     }
+  }
+
+  const handleLogoutCancel = () => {
+    setShowLogoutModal(false)
   }
 
   const sidebarItems = [
@@ -275,7 +287,7 @@ export default function Sidebar({ activeItem }) {
         {/* Logout Button */}
         <div style={{ padding: '1rem' }}>
           <button
-            onClick={handleLogout}
+            onClick={handleLogoutClick}
             style={{
               width: '100%',
               display: 'flex',
@@ -304,6 +316,162 @@ export default function Sidebar({ activeItem }) {
           </button>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '2rem',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            animation: 'modalFadeIn 0.2s ease-out'
+          }}>
+            {/* Close button */}
+            <button
+              onClick={handleLogoutCancel}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#6b7280',
+                padding: '0.25rem'
+              }}
+            >
+              <X size={20} />
+            </button>
+
+            {/* Icon */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                backgroundColor: '#fef2f2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <AlertTriangle size={32} color="#dc2626" />
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: '600',
+              color: '#111827',
+              textAlign: 'center',
+              marginBottom: '0.5rem'
+            }}>
+              Confirm Logout
+            </h3>
+
+            {/* Message */}
+            <p style={{
+              fontSize: '0.95rem',
+              color: '#6b7280',
+              textAlign: 'center',
+              marginBottom: '1.5rem',
+              lineHeight: '1.5'
+            }}>
+              Are you sure you want to logout? You will need to sign in again to access your account.
+            </p>
+
+            {/* Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '0.75rem'
+            }}>
+              <button
+                onClick={handleLogoutCancel}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1rem',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.95rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.backgroundColor = '#e5e7eb'
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.backgroundColor = '#f3f4f6'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogoutConfirm}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1rem',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.95rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.backgroundColor = '#b91c1c'
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.backgroundColor = '#dc2626'
+                }}
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </div>
+          </div>
+
+          {/* Modal animation styles */}
+          <style jsx>{`
+            @keyframes modalFadeIn {
+              from {
+                opacity: 0;
+                transform: scale(0.95);
+              }
+              to {
+                opacity: 1;
+                transform: scale(1);
+              }
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   )
 }
